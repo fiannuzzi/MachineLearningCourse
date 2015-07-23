@@ -1,0 +1,90 @@
+---
+title: "Machine Learning Course Project"
+author: "Francesca Iannuzzi"
+date: "23 Jul 2015"
+output: html_document
+---
+We are given a dataset containing information on a specific physical activity performed by 6 participants. The activity is performed in 5 different ways (A, B, C, D, E) and registered by a number of body sensors. The point of the project is to develop a predictive model that will allow us to guess the way the activity is being performed (A to E) from the data collected by to the body sensors.
+
+# Set up
+We are given a training and a test set. We do not know the classification of the 20 activities in the test set as their prediction is one of the goal of this project. I use conventional validation to assess the performance of the model. This means that I split the original training set into a training and testing set, containing, respectively, 60% and 40% of the initial data:
+
+```{r, eval=FALSE}
+inTrain <- createDataPartition(y=train$classe, p=0.6, list=FALSE)
+traintrain <- train[inTrain,]
+traintest <- train[-inTrain,]
+```
+
+Hereafter I will refer to these two as "training" and "test" sets.
+
+# Selection of predictors
+The dataset has 160 columns - i.e. 159 predictors. After visual inspection, the first 6 columns seem to be of no use for building the model. In addition, in several columns 97% of the entries are NA values. I am removing these from the dataset.
+
+Finally, I look for variables with little variability and discard them:
+```{r, eval=FALSE}
+variability_info <- nearZeroVar(traintrain, saveMetrics = TRUE)
+newcols <- rownames(variability_info[which(variability_info$nzv==FALSE),])
+new_traintrain <- traintrain[, newcols]
+```
+
+After this selection, I am left with 52 predictors.
+
+# Preprocessing 
+I compared the results of the predictive model with and without preprocessing, albeit for just a random subset of the training set. The preprocessing procedure I considered and performed is Principal Component Analysis (PCA).
+
+Performing PCA allowed me to reduce the number of predictors to around 20, thereby considerably speeding up the subsequent training procedure. However, this came with a cost in terms of lower accuracy in the prediction. 
+
+For a random subsample of 2000 cases (around 20% of the training set) the accuracy of the model obtained without PCA is 10% higher than when PCA is performed. The discrepancy diminishes as the sample size increases. Based on this subsample, the predictions for the 20 unknown test cases agree 90% of the time.
+
+Given these facts, I eventually decided to run PCA and trade what I evaluated to be a reasonable loss in accuracy for a gain in computational time.
+
+Below is the code performing the analysis:
+```{r, eval=FALSE}
+preProc <- preProcess(new_traintrain[,-53], method="pca", thresh=0.90, na.remove=TRUE)
+trainPC <- predict(preProc, new_traintrain[,-53])
+```
+
+# Training
+I decided to use Random Forests to obtain the predictive model. The reason for this choice is just safety. By researching on the internet I had the impression that this method provides a good 'first cut' and is safe enough in newbies hands.
+
+```{r, eval=FALSE}
+modelPCA <- train(new_traintrain$classe ~., method="rf", data=trainPC)
+```
+
+# Validation
+I now apply the model to the test set:
+```{r, eval=FALSE}
+testPC <- predict(preProc, new_traintest[,-53])
+model_prediction <- predict(modelPCA,testPC)
+```
+and check how the results compare to reality:
+```{r, eval=FALSE}
+print(confusionMatrix(new_traintest$classe, model_prediction))
+```
+```{r, echo=FALSE}
+dget('conf_Matrix.txt')
+```
+The model predictions for the test set are correct ~97% of the time (accuracy measure). 
+
+# Prediction
+Finally, I apply the model obtained above to the test set with unknown outcome:
+```{r, eval=FALSE}
+testPC <- predict(preProc, test)
+modelResult2 <- predict(model2, testPC)
+```
+The result is: 
+"B" "A" "A" "A" "A" "E" "D" "B" "A" "A" "B" "C" "B" "A" "E" "E" "A" "B" "B" "B"
+
+Given the accuracy of the model, the probability that all predictions are correct is 56%.
+
+# Limitations
+I list here what I think the potential weak points of this analysis are:
+
+- I used conventional validation instead of cross validation;
+- I discarded the columns with NA values without checking that these indeed did not provide any useful information;
+- I removed variables with near zero variance as an attempt to reduce the overall number of variables, but without much control over the meaning of this diagnosis;
+- I decided to use PCA and thereby accepted a loss in accuracy;
+- I decided to use Random Forests out of ignorance, but there could well be more appropriate methods for this problem.
+
+# Acknowledgements
+This work would not have been possible without Google, Stack Overflow, a number of R community platforms and the course's discussion forum.
